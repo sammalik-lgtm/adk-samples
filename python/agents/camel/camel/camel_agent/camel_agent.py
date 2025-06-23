@@ -12,17 +12,14 @@ from google.adk.agents import base_agent
 from google.adk.agents import invocation_context
 from google.adk.agents import llm_agent
 from google.adk.agents import loop_agent
-from google.adk.agents import sequential_agent
 from google.adk.events import event
 from google.adk.events import event_actions
 from google.adk.models import base_llm
-from google.adk.tools import agent_tool
 from google.genai import types
+import pydantic
 from pydantic.v1 import validators
 from typing_extensions import override
 
-from . import utils
-from . import prompts
 from ..camel_library import function_types
 from ..camel_library import result
 from ..camel_library import security_policy
@@ -30,18 +27,18 @@ from ..camel_library.capabilities import capabilities
 from ..camel_library.interpreter import camel_value
 from ..camel_library.interpreter import interpreter
 from ..camel_library.interpreter import library
+from . import prompts
+from . import utils
 
+BaseModel = pydantic.BaseModel
 InvocationContext = invocation_context.InvocationContext
 
 Event = event.Event
 EventActions = event_actions.EventActions
 
-SequentialAgent = sequential_agent.SequentialAgent
 LoopAgent = loop_agent.LoopAgent
 LlmAgent = llm_agent.LlmAgent
 BaseAgent = base_agent.BaseAgent
-
-AgentTool = agent_tool.AgentTool
 
 BaseLlm = base_llm.BaseLlm
 
@@ -59,34 +56,53 @@ SecurityPolicyResult = security_policy.SecurityPolicyResult
 
 CaMeLException = interpreter.CaMeLException
 
+Tool = tuple[Callable[..., Any], Any, Any]
+
 int_validator = validators.int_validator
 float_validator = validators.float_validator
 bool_validator = validators.bool_validator
 
 
-class QuarantinedLlmService:
+class QuarantinedLlmService(BaseModel):
   """Manages synchronous interactions with the Quarantined LLM (Q-LLM)."""
+
+  model: str | BaseLlm
+  name: str
+  user_id: str
+
+  agent: LlmAgent
+  runner: runners.InMemoryRunner
+  pattern: re.Pattern
+
+  model_config = {"arbitrary_types_allowed": True}
 
   def __init__(
       self,
-      model_identifier: str | BaseLlm,
+      model: str | BaseLlm,
       name: str = "QLLM_Service",
       user_id: str = "test_user_id",
   ):
-    self.llm_name = name
-    self.llm_agent = LlmAgent(
-        model=model_identifier,
-        name=self.llm_name,
+    agent = LlmAgent(
+        model=model,
+        name=name,
         instruction=prompts.QLLM_SYSTEM_PROMPT,
     )
-    self.runner = runners.InMemoryRunner(
-        agent=self.llm_agent,
-        app_name=self.llm_agent.name,
+
+    runner = runners.InMemoryRunner(
+        agent=agent,
+        app_name=name,
     )
 
-    self.user_id = user_id
+    pattern = re.compile(re.escape(name))
 
-    self.pattern_qllm = re.compile(re.escape(self.llm_name))
+    super().__init__(
+        model=model,
+        name=name,
+        user_id=user_id,
+        agent=agent,
+        runner=runner,
+        pattern=pattern,
+    )
 
   async def _run_async(
       self, query: str, output_schema: str
@@ -94,7 +110,7 @@ class QuarantinedLlmService:
     """Runs a query on the Q-LLM session."""
 
     qllm_session = await self.runner.session_service.create_session(
-        app_name=self.llm_name, user_id=self.user_id
+        app_name=self.name, user_id=self.user_id
     )
 
     qllm_query = f"{query} \n\n output_schema: {output_schema}"
@@ -108,7 +124,7 @@ class QuarantinedLlmService:
       yield e
 
     await self.runner.session_service.delete_session(
-        app_name=self.llm_name, user_id=self.user_id, session_id=qllm_session.id
+        app_name=self.name, user_id=self.user_id, session_id=qllm_session.id
     )
 
   def run(self, query: str, output_schema: str) -> Iterator[Event]:
@@ -227,7 +243,7 @@ class QuarantinedLlmService:
           query=query,
           output_schema=output_schema,
       ):
-        if e.content and self.pattern_qllm.fullmatch(e.author):
+        if e.content and self.pattern.fullmatch(e.author):
           response_parts.extend(e.content.parts)
 
       response_text = "".join(map(utils.sanitized_part, response_parts))
@@ -252,52 +268,68 @@ class QuarantinedLlmService:
     return query_ai_assistant
 
 
-class CaMelInterpreterService:
+class CaMelInterpreterService(BaseModel):
   """Manages CaMeL interpreter state, functions, and execution."""
+
+  model: str | BaseLlm
+  tools: list[Tool]
+  classes_to_exclude: frozenset[str]
+  eval_args: interpreter.EvalArgs
+  namespace: Namespace
+  quarantined_llm_service: QuarantinedLlmService
+
+  model_config = {"arbitrary_types_allowed": True}
 
   def __init__(
       self,
-      model_identifier: str | BaseLlm,
-      tools: list[tuple[Callable[..., Any], Any, Any]],
+      model: str | BaseLlm,
+      tools: list[Tool],
       eval_args: interpreter.EvalArgs,
   ):
-    self.quarantined_llm_service = QuarantinedLlmService(
-        model_identifier=model_identifier,
+    quarantined_llm_service = QuarantinedLlmService(
+        model=model,
         name="QLLM_Service",
     )  # Manages interactions with the QLLM.
 
-    self._tools: list[tuple[Callable[..., Any], Any, Any]] = tools
-    self._classes_to_exclude: frozenset[str] = frozenset(
+    classes_to_exclude: frozenset[str] = frozenset(
         {"datetime", "timedelta", "date", "time", "NaiveDatetime", "timezone"}
     )
-    self.eval_args = eval_args
-    self.model_identifier = model_identifier
 
-    self._tools.append((
-        self.quarantined_llm_service.get_query_ai_assistant_function(),
+    camel_tools = tools[:]
+
+    camel_tools.append((
+        quarantined_llm_service.get_query_ai_assistant_function(),
         capabilities.Capabilities.camel(),
         (capabilities.readers.Public(),),
     ))
 
-    self._namespace = library.make_builtins_namespace(
+    namespace = library.make_builtins_namespace(
         variables={
-            (
-                func_name := f.__name__ if hasattr(f, "__name__") else "f"
-            ): CaMeLFunction(
+            (func_name := f.__name__): CaMeLFunction(
                 name=func_name,
                 py_callable=f,
                 capabilities=caps,
                 dependencies=deps,
             )
-            for f, caps, deps in self._tools
+            for f, caps, deps in camel_tools
+            if hasattr(f, "__name__")
         }
     )
 
+    super().__init__(
+        model=model,
+        tools=camel_tools,
+        classes_to_exclude=classes_to_exclude,
+        eval_args=eval_args,
+        namespace=namespace,
+        quarantined_llm_service=quarantined_llm_service,
+    )
+
   def get_funcs_for_pllm_prompt(self) -> list[Callable[..., Any]]:
-    return [f for f, _, _ in self._tools]
+    return [f for f, _, _ in self.tools if hasattr(f, "__name__")]
 
   def get_classes_to_exclude(self) -> frozenset[str]:
-    return self._classes_to_exclude
+    return self.classes_to_exclude
 
   def execute_code(
       self,
@@ -320,7 +352,7 @@ class CaMelInterpreterService:
     interpreter_res, updated_namespace, new_tool_calls, new_dependencies = (
         interpreter.parse_and_interpret_code(
             code,
-            self._namespace,
+            self.namespace,
             tool_calls_chain,
             current_dependencies,
             self.eval_args,
@@ -352,22 +384,23 @@ class CaMelInterpreterService:
 class CaMeLInterpreter(BaseAgent):
   """Manages the CaMeL interpreter agent."""
 
-  _camel_interpreter_service: CaMelInterpreterService | None = None
+  camel_interpreter_service: CaMelInterpreterService
+
+  model_config = {"arbitrary_types_allowed": True}
 
   def __init__(
       self,
       name: str,
       camel_interpreter_service: CaMelInterpreterService,
   ):
-    super().__init__(name=name)
-    self._camel_interpreter_service = camel_interpreter_service
+    super().__init__(
+        name=name, camel_interpreter_service=camel_interpreter_service
+    )
 
   @override
   async def _run_async_impl(
       self, ctx: InvocationContext
   ) -> AsyncGenerator[Event, None]:
-    if not self._camel_interpreter_service:
-      raise ValueError("Camel interpreter service is not initialized.")
 
     yield Event(
         author=self.name,
@@ -403,7 +436,7 @@ class CaMeLInterpreter(BaseAgent):
     dependencies = ctx.session.state.get("dependencies") or ()
 
     printed_output, ad_tool_calls, error, _, dependencies = (
-        self._camel_interpreter_service.execute_code(
+        self.camel_interpreter_service.execute_code(
             p_llm_code, function_calls, dependencies
         )
     )  # printed_output, ad_tool_calls, error, namespace, dependencies
@@ -444,46 +477,43 @@ class CaMeLAgent(BaseAgent):
     tools: The tools to use (py_callable, capabilities, dependencies)
   """
 
-  # General config
-  model: str | BaseLlm = ""
-  instruction: str = ""
-  tools: list[tuple[Callable[..., Any], Any, Any]] = []
+  model: str | BaseLlm
+  instruction: str
+  tools: list[Tool]
 
-  # Private fields, used to store the sub-agents.
-  _camel_interpreter_agent: Optional[CaMeLInterpreter] = None
-  _pllm_agent: Optional[LlmAgent] = None
-  _loop_agent: Optional[LoopAgent] = None
+  camel_interpreter_agent: CaMeLInterpreter
+  pllm_agent: LlmAgent
+  loop_agent: LoopAgent
+
+  model_config = {"arbitrary_types_allowed": True}
 
   def __init__(
       self,
       name: str,
-      model: str | BaseLlm = "",
+      model: str | BaseLlm = "gemini-2.5-pro",
       description: str = "",
       instruction: str = "",
-      tools: Optional[list[tuple[Callable[..., Any], Any, Any]]] = None,
+      tools: Optional[list[Tool]] = None,
       security_policy_engine: SecurityPolicyEngine = security_policy.NoSecurityPolicyEngine(),
       eval_mode: DependenciesPropagationMode = DependenciesPropagationMode.NORMAL,
   ):
-    super().__init__(name=name, description=description)
-    self.model = model
-    self.instruction = instruction
-    self.tools = tools or []
 
     camel_interpreter_service = CaMelInterpreterService(
-        model_identifier=self.model,
-        tools=self.tools,
+        model=model,
+        tools=tools or [],
         eval_args=interpreter.EvalArgs(
             eval_mode=eval_mode,
             security_policy_engine=security_policy_engine,
         ),
     )
-    self._camel_interpreter_agent = CaMeLInterpreter(
+    camel_interpreter_agent = CaMeLInterpreter(
         name="CaMeLInterpreter",
         camel_interpreter_service=camel_interpreter_service,
     )
-    self._pllm_agent = LlmAgent(
+
+    pllm_agent = LlmAgent(
         name="PLLM",
-        model=self.model,
+        model=model,
         instruction=prompts.generate_camel_system_prompt(
             list(
                 map(
@@ -496,21 +526,30 @@ class CaMeLAgent(BaseAgent):
         output_key="p_llm_code",
     )
 
-    self._loop_agent = LoopAgent(
+    loop_agent = LoopAgent(
         name="CaMeLLoopAgent",
-        sub_agents=[self._pllm_agent, self._camel_interpreter_agent],
+        sub_agents=[pllm_agent, camel_interpreter_agent],
         max_iterations=10,
+    )
+
+    super().__init__(
+        name=name,
+        description=description,
+        model=model,
+        instruction=instruction,
+        tools=tools or [],
+        camel_interpreter_agent=camel_interpreter_agent,
+        pllm_agent=pllm_agent,
+        loop_agent=loop_agent,
     )
 
   @override
   async def _run_async_impl(
       self, ctx: InvocationContext
   ) -> AsyncGenerator[Event, None]:
-    if not self._loop_agent:
-      raise ValueError("Agent is not initialized. Call initialize() first.")
     try:
       # Run the loop agent. This is the main loop of the agent.
-      async for e in self._loop_agent.run_async(ctx):
+      async for e in self.loop_agent.run_async(ctx):
         yield e
     except security_policy.SecurityPolicyDeniedError as e:
       yield Event(

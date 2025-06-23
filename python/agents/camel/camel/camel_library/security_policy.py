@@ -73,7 +73,7 @@ def base_security_policy(
 class SecurityPolicyDeniedError(Exception):
   ...
 
-
+@typing.runtime_checkable
 class SecurityPolicyEngine(typing.Protocol):
   """Protocol for a Security policy engine."""
 
