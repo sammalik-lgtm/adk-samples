@@ -16,9 +16,9 @@ import pydantic.fields
 from typing_extensions import ParamSpec
 from typing_extensions import TypeVar
 
-from ..camel import function_types
-from ..camel.interpreter import camel_value
-from ..camel.interpreter import library
+from ..camel_library import function_types
+from ..camel_library.interpreter import camel_value
+from ..camel_library.interpreter import library
 
 
 DocstringParam = common.DocstringParam

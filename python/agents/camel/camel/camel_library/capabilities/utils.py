@@ -4,7 +4,7 @@ from typing import Any, Protocol
 from . import capabilities
 from . import readers
 from . import sources
-from . import camel_value
+from ..interpreter import camel_value
 
 
 class HasDependenciesAndCapabilities(Protocol):

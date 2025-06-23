@@ -23,13 +23,13 @@ from typing_extensions import override
 
 from . import utils
 from . import prompts
-from ..camel import function_types
-from ..camel import result
-from ..camel import security_policy
-from ..camel.capabilities import capabilities
-from ..camel.interpreter import camel_value
-from ..camel.interpreter import interpreter
-from ..camel.interpreter import library
+from ..camel_library import function_types
+from ..camel_library import result
+from ..camel_library import security_policy
+from ..camel_library.capabilities import capabilities
+from ..camel_library.interpreter import camel_value
+from ..camel_library.interpreter import interpreter
+from ..camel_library.interpreter import library
 
 InvocationContext = invocation_context.InvocationContext
 
@@ -333,14 +333,11 @@ class CaMelInterpreterService:
 
     final_eval_output_str = ""
     error_obj = None
-    if isinstance(interpreter_res, result.Error):
-      error_obj = interpreter_res.error
-    elif isinstance(interpreter_res, result.Ok):
-      final_eval_output_str = (
-          interpreter_res.value.raw
-          if interpreter_res.value.raw is not None
-          else ""
-      )
+    match interpreter_res:
+      case result.Error(error):
+        error_obj = error
+      case result.Ok(v_obj):
+        final_eval_output_str = v_obj.raw if v_obj.raw is not None else ""
 
     combined_output = f"{printed_output}\n{final_eval_output_str}".strip()
     return (
