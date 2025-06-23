@@ -3,9 +3,8 @@
 from collections.abc import Iterable
 
 from google.genai import types
-import termcolor
 
-from ..camel import function_types
+from ..camel_library import function_types
 
 
 FunctionCall = function_types.FunctionCall
@@ -14,9 +13,7 @@ FunctionCall = function_types.FunctionCall
 def sanitized_part(part: types.Part) -> str:
   """Returns a sanitized string representation of expected response parts."""
   if part.thought and part.text:
-    return termcolor.colored(
-        f"<thought>{part.text}</thought>\n", color="yellow"
-    )
+    return f"<thought>{part.text}</thought>\n"
   if part.text:
     return part.text
   if part.function_call:

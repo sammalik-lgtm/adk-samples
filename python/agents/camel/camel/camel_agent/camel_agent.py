@@ -7,22 +7,22 @@ import re
 import threading
 from typing import Any, AsyncGenerator, Callable, Optional
 
-from adk import runners
-from adk.agents import base_agent
-from adk.agents import invocation_context
-from adk.agents import llm_agent
-from adk.agents import loop_agent
-from adk.agents import sequential_agent
-from adk.events import event
-from adk.events import event_actions
-from adk.models import base_llm
-from adk.tools import agent_tool
+from google.adk import runners
+from google.adk.agents import base_agent
+from google.adk.agents import invocation_context
+from google.adk.agents import llm_agent
+from google.adk.agents import loop_agent
+from google.adk.agents import sequential_agent
+from google.adk.events import event
+from google.adk.events import event_actions
+from google.adk.models import base_llm
+from google.adk.tools import agent_tool
 from google.genai import types
 from pydantic.v1 import validators
 from typing_extensions import override
 
 from . import utils
-from ..camel import prompts
+from . import prompts
 from ..camel import function_types
 from ..camel import result
 from ..camel import security_policy
@@ -232,7 +232,7 @@ class QuarantinedLlmService:
 
       response_text = "".join(map(utils.sanitized_part, response_parts))
 
-      clog.bold_green_print(
+      print(
           f"query_ai_assistant(query='{query}',"
           f" output_schema='{output_schema}') -> {response_text}",
           end="\n\n",
@@ -333,11 +333,14 @@ class CaMelInterpreterService:
 
     final_eval_output_str = ""
     error_obj = None
-    match interpreter_res:
-      case result.Error(error):
-        error_obj = error
-      case result.Ok(v_obj):
-        final_eval_output_str = v_obj.raw if v_obj.raw is not None else ""
+    if isinstance(interpreter_res, result.Error):
+      error_obj = interpreter_res.error
+    elif isinstance(interpreter_res, result.Ok):
+      final_eval_output_str = (
+          interpreter_res.value.raw
+          if interpreter_res.value.raw is not None
+          else ""
+      )
 
     combined_output = f"{printed_output}\n{final_eval_output_str}".strip()
     return (
@@ -412,7 +415,7 @@ class CaMeLInterpreter(BaseAgent):
     ctx.session.state.update(dict(dependencies=dependencies))
 
     # Print the results.
-    clog.bold_magenta_print("Interpreter output:", end="\n")
+    print("Interpreter output:", end="\n")
     print("\t printed output:", printed_output)
 
     print(
@@ -537,5 +540,5 @@ class CaMeLAgent(BaseAgent):
           ),
       )
     except Exception as e:
-      clog.bold_red_print(f"CaMeL agent failed: {e}", end="\n")
+      print(f"CaMeL agent failed: {e}", end="\n")
       raise e
