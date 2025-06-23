@@ -412,16 +412,7 @@ class CaMeLInterpreter(BaseAgent):
     ctx.session.state.update(dict(dependencies=dependencies))
 
     # Print the results.
-    print("Interpreter output:", end="\n")
-    print("\t printed output:", printed_output)
-
-    print(
-        "\t Total function_calls after run_code:",
-        ctx.session.state.get("function_calls"),
-    )
-    print(
-        "\t dependencies after run_code:", ctx.session.state.get("dependencies")
-    )
+    print(f"Interpreter output: {printed_output}", end="\n\n")
 
     # 3. Add additional messages to the conversation based on the eval result.
     if error is not None:
