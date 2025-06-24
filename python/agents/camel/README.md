@@ -74,8 +74,8 @@ The agent operates in a cyclical manner:
 1. The agent receives a user's request.
 2. The PLLM generates Python code based on the request and available tools, then saves the code to session state
 3. The CaMeLInterpreter reads the code from session state, and passes it to the `CaMeLInterpreterService` for execution.
-    a. QLLM Invocation: If necessary, the generated code can invoke the `query_ai_assistant` function to extract structured information using the QLLM.
-    b. The interpreter will invoke the provided `SecurityPolicyEngine` before each tool call to ensure compliant code execution.
+    - QLLM Invocation: If necessary, the generated code can invoke the `query_ai_assistant` function to extract structured information using the QLLM.
+    - The interpreter will invoke the provided `SecurityPolicyEngine` before each tool call to ensure compliant code execution.
 4. The CaMeLAgent decides whether to terminate the process - upon success or reaching a maximum number of iterations - or to continue with new code generation.
 
   
