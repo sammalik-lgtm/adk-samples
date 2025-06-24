@@ -1,6 +1,6 @@
 # CaMeL-Powered Secure Agent Demo with ADK
 ## Overview
-This demo showcases an Agent Development Kit (ADK) implementation that leverages the CaMeL framework for enhanced security and controlled data flow in LLM agents. CaMeL (Defeating Prompt Injections by Design) provides a robust defense against prompt injection attacks by explicitly separating control and data flows within the agent. This ensures that untrusted data cannot compromise the agent's intended execution path. Additionally, CaMeL allows for the definition of precise rules that are consistently enforced over data flows between tool calls. This demo is not for production usage and in strictly intended for research-oriented purposes.
+This demo showcases an Agent Development Kit (ADK) implementation that leverages the CaMeL framework for enhanced security and controlled data flow in LLM agents. CaMeL ([Defeating Prompt Injections by Design](https://arxiv.org/abs/2503.18813)) provides a robust defense against prompt injection attacks by explicitly separating control and data flows within the agent. Additionally, CaMeL allows for the definition of precise rules that are consistently enforced over data flows between tool calls. This demo is not for production usage and is strictly intended for research-oriented purposes.
 
 ## Agent Details
 The system leverages CaMeL, specified in [this paper](https://arxiv.org/abs/2503.18813), for secure execution and data flow management.
