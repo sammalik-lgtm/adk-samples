@@ -8,7 +8,7 @@ The system leverages CaMeL, specified in [this paper](https://arxiv.org/abs/2503
 #### Agent Architecture
 This diagram shows the detailed architecture of the agents and tools used to implement this workflow:
 
-<camel.png>
+![CaMeL Workflow](<camel.png>)
 
 The system is composed of the following agents, each with a specific responsibility:
 
