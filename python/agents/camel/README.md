@@ -18,7 +18,7 @@ The system is composed of the following agents, each with a specific responsibil
 | *QuarantinedLlmService* | Wrapper service to manage and isolate interactions with the QLLM Agent |
 | *CaMeLInterpreterService* | Service that manages interactions with the interpreter that runs generated code. It has access to a *QuarantinedLlmService* to make stateless calls to the *QLLM* agent. |
 | *CaMeLInterpreter* | BaseAgent wrapper around the *CaMeLInterpreterService* for integration with ADK |
-| *PLLM* | LlmAgent that generated code to fulfill user's request |
+| *PLLM* | LlmAgent that generates code to fulfill user's request |
 | **CaMeLAgent** | A loop agent that comprises of a *PLLM* and a *CaMeLInterpreter* |
   
 
@@ -196,38 +196,38 @@ external_tools = [
 Each tool call is preceded by a security policy check. The policy, based on the tool's parameters, determines if the action is allowed or denied. In this example, we will define an 'always allow' policy for reading the document, but a stricter policy for sending an email: Prevent emails from being sent to recipients who can't read the contents of the body. The policy works by ensure the recipient specified by the 'to' field matches the readers of the 'body' field:
 
 ```python
-  def search_document_policy(
-        self, tool_name: str, kwargs: Mapping[str, camel_agent.CaMeLValue]
-    ) -> SecurityPolicyResult:
-      """A test security policy for search_document."""
-      # Allow any arguments to search_document
-      return Allowed()
+def search_document_policy(
+    self, tool_name: str, kwargs: Mapping[str, camel_agent.CaMeLValue]
+) -> SecurityPolicyResult:
+    """A test security policy for search_document."""
+    # Allow any arguments to search_document
+    return Allowed()
 
-    def send_email_policy(
-        self, tool_name: str, kwargs: Mapping[str, camel_agent.CaMeLValue]
-    ) -> SecurityPolicyResult:
-      """A test security policy for send_email."""
+def send_email_policy(
+    self, tool_name: str, kwargs: Mapping[str, camel_agent.CaMeLValue]
+) -> SecurityPolicyResult:
+    """A test security policy for send_email."""
 
-      # Get the 'to' and 'body' arguments from the input kwargs
-      to = kwargs.get("to", None)
-      body = kwargs.get("body", None)
+    # Get the 'to' and 'body' arguments from the input kwargs
+    to = kwargs.get("to", None)
+    body = kwargs.get("body", None)
 
-      # Check if both 'to' and 'body' arguments are provided
-      if not to or not body:
-        return Denied("All arguments must be provided.")
+    # Check if both 'to' and 'body' arguments are provided
+    if not to or not body:
+    return Denied("All arguments must be provided.")
 
-      # Create a set of potential readers from the 'to' argument
-      potential_readers = set([to.raw])
+    # Create a set of potential readers from the 'to' argument
+    potential_readers = set([to.raw])
 
-      # If the body can be read by the potential readers or is public,
-      # then the email can be sent.
-      if capabilities_utils.can_readers_read_value(potential_readers, body):
-        return Allowed()
-      # Otherwise, deny the request
-      return Denied(
-          f"The body cannot be read by {to.raw}. It can only be read by"
-          f" {capabilities_utils.get_all_readers(body)[0]}"
-      )
+    # If the body can be read by the potential readers or is public,
+    # then the email can be sent.
+    if capabilities_utils.can_readers_read_value(potential_readers, body):
+    return Allowed()
+    # Otherwise, deny the request
+    return Denied(
+        f"The body cannot be read by {to.raw}. It can only be read by"
+        f" {capabilities_utils.get_all_readers(body)[0]}"
+    )
 ```
 All policies are defined in `TestSecurityPolicyEngine`
 
