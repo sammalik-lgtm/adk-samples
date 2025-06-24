@@ -1,11 +1,11 @@
 # CaMeL-Powered Secure Agent Demo with ADK
-### Overview
+## Overview
 This demo showcases an Agent Development Kit (ADK) implementation that leverages the CaMeL framework for enhanced security and controlled data flow in LLM agents. CaMeL (Defeating Prompt Injections by Design) provides a robust defense against prompt injection attacks by explicitly separating control and data flows within the agent. This ensures that untrusted data cannot compromise the agent's intended execution path. Additionally, CaMeL allows for the definition of precise rules that are consistently enforced over data flows between tool calls. This demo is not for production usage and in strictly intended for research-oriented purposes.
 
-### Agent Details
+## Agent Details
 The system leverages CaMeL, specified in [this paper](https://arxiv.org/abs/2503.18813), for secure execution and data flow management.
 
-#### Agent Architecture
+### Agent Architecture
 This diagram shows the detailed architecture of the agents and tools used to implement this workflow:
 
 ![CaMeL Workflow](<camel.png>)
@@ -67,7 +67,7 @@ The CaMeL agent architecture is designed for the reliable and secure execution o
 - It handles exceptions, including security policy violations, and provides meaningful feedback to the user.
 
 
-#### Interaction Flow
+### Interaction Flow
 
 The agent operates in a cyclical manner:
 
@@ -79,10 +79,72 @@ The agent operates in a cyclical manner:
 4. The CaMeLAgent decides whether to terminate the process - upon success or reaching a maximum number of iterations - or to continue with new code generation.
 
   
-#### Security Considerations
+### Security Considerations
 
 1. Code Isolation: The CaMeLInterpreterService executes code within a sandboxed environment, preventing unauthorized access to the system.
 2. Capability-Based Security: A SecurityPolicyEngine enforces fine-grained control over the capabilities of the generated code, preventing potential exploits.
 3. Stateless QLLM: The QLLM's stateless nature mitigates the risk of persistent vulnerabilities across multiple requests.
 4. Input Validation: The system validates the output schema of the QLLM to prevent unexpected data types.
 5. Exception Handling: Errors during code execution are managed and reported gracefully, avoiding unexpected failures.
+
+## Setup and Installation
+
+1.  **Prerequisites**
+
+    *   Python 3.12+
+    *   Poetry
+        *   For dependency management and packaging. Please follow the
+            instructions on the official
+            [Poetry website](https://python-poetry.org/docs/) for installation.
+
+        ```bash
+        pip install poetry
+        ```
+
+    * A project on Google Cloud Platform
+    * Google Cloud CLI
+        *   For installation, please follow the instruction on the official
+            [Google Cloud website](https://cloud.google.com/sdk/docs/install).
+
+2.  **Installation**
+
+    ```bash
+    # Clone this repository.
+    git clone https://github.com/google/adk-samples.git
+    cd adk-samples/python/agents/camel
+    # Install the package and dependencies.
+    poetry install
+    ```
+
+3.  **Configuration**
+
+    *   Set up Google Cloud credentials.
+
+        *   You may set the following environment variables in your shell, or in
+            a `.env` file instead. Please copy the `.env.example` and replace the fields with your own.
+
+        ```bash
+        export GOOGLE_GENAI_USE_VERTEXAI=true
+        export GOOGLE_CLOUD_PROJECT=<your-project-id>
+        export GOOGLE_CLOUD_LOCATION=<your-project-location>
+        ```
+
+    *   Authenticate your GCloud account.
+
+        ```bash
+        gcloud auth application-default login
+        gcloud auth application-default set-quota-project $GOOGLE_CLOUD_PROJECT
+        ```
+
+## Running the Agent
+
+**Using `adk`**
+
+ADK provides convenient ways to bring up agents locally and interact with them.
+You may talk to the agent using the CLI:
+
+```bash
+adk run camel
+```
+
+## Provided example
