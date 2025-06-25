@@ -479,6 +479,8 @@ class CaMeLInterpreter(BaseAgent):
       # Stop the loop if the eval result is successful.
       # Get printed output from the eval result, and add it to the conversation.
       ctx.session.state.update(dict(eval_result=printed_output))
+      # Remove the p_llm_code upon success to subsequent prompts aren't impacted.
+      ctx.session.state.update(dict(p_llm_code=None))
       yield Event(author=self.name, actions=EventActions(escalate=True))
 
 
@@ -565,6 +567,8 @@ class CaMeLAgent(BaseAgent):
       # Run the loop agent. This is the main loop of the agent.
       async for e in self.loop_agent.run_async(ctx):
         yield e
+      # Remove the PLLM code from the session state.
+      ctx.session.state.update(dict(p_llm_code=None))
     except security_policy.SecurityPolicyDeniedError as e:
       yield Event(
           author=self.name,
